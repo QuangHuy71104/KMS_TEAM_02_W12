@@ -26,12 +26,13 @@ BASE_DIR = Path(__file__).resolve().parent
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "kms_collection")
 DEFAULT_TOP_K = 4
 DEFAULT_TEMPERATURE = 0.2
-VALID_ROLES = {"public", "customer_service", "it_staff", "hr_manager"}
+VALID_ROLES = {"public", "customer_service", "it_staff", "hr_manager", "admin"}
 ROLE_ACCESS = {
     "public": {"public"},
     "customer_service": {"public"},
     "it_staff": {"it_staff", "public"},
     "hr_manager": {"hr_manager", "public"},
+    "admin": {"public", "it_staff", "hr_manager"},
 }
 FALLBACK_ANSWER = (
     "I could not find enough information in the Triple H & T knowledge base to answer this question accurately. "
@@ -183,8 +184,10 @@ def load_vector_db(persist_dir: str | Path | None = None):
     )
 
 
-def role_filter(user_role: str) -> dict:
+def role_filter(user_role: str) -> dict | None:
     role = user_role if user_role in VALID_ROLES else "public"
+    if role == "admin":
+        return None
     if role == "customer_service":
         return {
             "$and": [
@@ -207,11 +210,15 @@ def restricted_access_answer(workspace_dimension: str, access_role: str) -> str:
 
 
 def role_can_access(user_role: str, access_role: str) -> bool:
+    if user_role == "admin":
+        return True
     clean_role = user_role if user_role in VALID_ROLES else "public"
     return access_role in ROLE_ACCESS.get(clean_role, {"public"})
 
 
 def detect_restricted_access_request(question: str, user_role: str) -> tuple[str, str] | None:
+    if user_role == "admin":
+        return None
     q = question.lower()
     hr_restricted_terms = [
         "salary",
